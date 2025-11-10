@@ -5,6 +5,7 @@ import pathlib
 import sys
 from typing import Set
 from models.model import SolutionSet
+from slnprojparse.loghelper import log_debug
 from slnprojparse.parsing import _collect_sln_files, discover_solution_set, parse_proj, parse_solution, solution_set_to_json
 
 
@@ -30,8 +31,6 @@ def parse_from_argv(argv):
     if not sln_files:
         print(f"[INFO] No .sln files to process under {target}", file=sys.stderr)
         return 0
-    _start_path = target #need this for SolutionSet
-
 
     solution_set = discover_solution_set(target)
 
@@ -40,7 +39,7 @@ def parse_from_argv(argv):
     # Return 0 to indicate success
     return 0
 
-def parse_from_current_folder(target:str):
+def parse_from_target_path(target:pathlib.Path):
     """
     Entry point.
 
@@ -56,8 +55,6 @@ def parse_from_current_folder(target:str):
     if not sln_files:
         print(f"[INFO] No .sln files to process under {target}", file=sys.stderr)
         return 0
-    _start_path = target #need this for SolutionSet
-
 
     solution_set = discover_solution_set(target)
 

@@ -68,7 +68,7 @@ pip install marshmallow==3.20.1 marshmallow-dataclass==8.5.13
 
 The script will still run without these packages – you just won’t get the solution_set_to_json() helper.
 
-<br><br>
+<br>
 
 <a name="#data-model"></a>Data model (dataclasses)
 =====================================================================================================

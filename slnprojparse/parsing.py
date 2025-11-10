@@ -148,7 +148,7 @@ def parse_proj(
                     file_name=os.path.basename(src_path),
                     full_path=str(src_path), 
                 )
-                child_projects.append(prj)
+                child_projects.append(_process_child_project(prj))
 
     # ------------------------------------------------------------------
     # * Discover child projects (ProjectReference)
@@ -173,9 +173,9 @@ def parse_proj(
     if "Sdk" in root.attrib:
         if root.attrib["Sdk"] is not None:
             if root.attrib["Sdk"]== "Microsoft.NET.Sdk":
-                project_type="dotNET_SDK'"
-    collected_source_files = _collect_source_files(root, ns_prefix, proj_path.parent)
-    if len(collected_source_files) < 1:
+                project_type="dotNET_SDK"
+    collected_source_files =  code_files #_collect_source_files(root, ns_prefix, proj_path.parent)
+    if len(collected_source_files) < 1 and project_type=="dotNET_SDK":
         collected_source_files=_get_sdk_files(project_type,proj_path.parent)
     proj_file_name = proj_path.name
     proj_folder_path = str(proj_path.parent.resolve())
@@ -186,14 +186,7 @@ def parse_proj(
         full_path=str(proj_full_path),
         project_folder_path=str(proj_folder_path),
         name=proj_path.stem,
-        code_files=[
-            CodeFile(
-                file_name=os.path.basename(cf_path),
-                full_path=str(cf_path),
-                language=_detect_language(cf_path.name),
-            )
-            for cf_path in collected_source_files
-        ],
+        code_files=collected_source_files,
         child_projects=child_projects,
     )
     return project, child_projects
@@ -205,33 +198,16 @@ def  _get_sdk_files(project_Type:str, proj_path:pathlib.Path) ->List[pathlib.Pat
         codeList.append(cs_file.resolve())
     for vb_file in proj_path.rglob("*.vb"):
         codeList.append(vb_file.resolve())
-    return codeList
 
-def _collect_source_files(
-    root: ET.Element,
-    ns_prefix: str,
-    base_dir: pathlib.Path,
-) -> List[pathlib.Path]:
-    """
-    Helper that extracts every file listed under `<Compile Include="…"/>`
-    (or any other item group that contains a file).  The function is deliberately
-    tolerant – if a node does not have an ``Include`` attribute it is skipped.
-    """
-    sources: List[pathlib.Path] = []
-
-    # Any element that has an ``Include`` attribute *and* ends with a known source‑file
-    # extension is treated as a source file.
-    for elem in root.iter():
-        inc = elem.attrib.get("Include")
-        if not inc:
-            continue
-        candidate = (base_dir / inc).resolve()
-        if candidate.is_file():
-            _language = _detect_language(candidate)
-            if _language is Language.CSharp or _language is Language.VB:
-                sources.append(candidate)
-
-    return sources
+    code_files= [
+            CodeFile(
+                file_name=os.path.basename(cf_path),
+                full_path=str(cf_path),
+                language=_detect_language(cf_path.name),
+            )
+            for cf_path in codeList
+    ]
+    return code_files
 
 # ------------------------------------------------------------------
 # * Parse a single project file (csproj, vbproj, …) → Project dataclass
@@ -251,20 +227,8 @@ def _parse_project_file(proj_path: pathlib.Path) -> Project:
     # Use the original ``parse_proj`` implementation to collect raw
     # dictionaries (filename + absolute path) for every <Compile> element.
     rootProj,childProj = parse_proj(proj_path)          # <-- the original helper from the script
-    raw_code_files=rootProj.code_files
-    log_debug("raw_code_files::",raw_code_files)
-    code_files: List[CodeFile] = []
-    for raw in raw_code_files:
-        lang_code = _detect_language(raw.file_name)
-        # Guard against unknown extensions – we still keep the file but mark the language as UNKNOWN.
-        language = Language(lang_code) if lang_code in Language.__members__.values() else Language.PY
-        code_files.append(
-            CodeFile(
-                file_name=raw.file_name,
-                full_path=raw.full_path,
-                language=language,
-            )
-        )
+    code_files=rootProj.code_files
+    child_projects = [_process_child_project(p) for p in childProj]
     log_debug("::code_files::",code_files)
     proj_folder_path = str(proj_path.parent.resolve())
     proj_full_path = str(proj_path.parent.resolve())
@@ -274,10 +238,15 @@ def _parse_project_file(proj_path: pathlib.Path) -> Project:
         full_path=str(proj_full_path),
         project_folder_path=str(str(proj_folder_path)),
         name=name,
-        code_files=code_files, child_projects=childProj
+        code_files=code_files, child_projects=child_projects
     )
 
-
+def _process_child_project(child_project:Project) -> Project:
+    log_debug("::child_project::",child_project)
+    child_project_folder_path = pathlib.Path(child_project.full_path).parent.resolve()
+    child_project.project_folder_path = str(child_project_folder_path)
+    return child_project
+     
 # ------------------------------------------------------------------
 # * Parse a .sln file → Solution dataclass (populated with Projects)
 # ------------------------------------------------------------------
